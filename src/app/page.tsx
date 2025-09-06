@@ -17,8 +17,9 @@ export default function Home() {
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const DEEPSEEK_API_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY!;
-  const DEEPSEEK_URL = process.env.NEXT_PUBLIC_DEEPSEEK_URL!;
+const DEEPSEEK_API_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY!;
+const DEEPSEEK_URL = process.env.NEXT_PUBLIC_DEEPSEEK_URL!;
+
 
   // Auto-scroll to bottom on new chat
   useEffect(() => {
