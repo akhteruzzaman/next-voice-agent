@@ -15,9 +15,15 @@ export default function Home() {
   const [transcript, setTranscript] = useState("");
   const [chat, setChat] = useState<Message[]>([]);
   const recognitionRef = useRef<any>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const DEEPSEEK_API_KEY = "sk-2f62e2bb08ea45af91999c0a5ca3ce31"; // 🔑 Replace with your key
-  const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"; // Chat endpoint
+  const DEEPSEEK_API_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY!;
+  const DEEPSEEK_URL = process.env.NEXT_PUBLIC_DEEPSEEK_URL!;
+
+  // Auto-scroll to bottom on new chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chat]);
 
   // Initialize SpeechRecognition
   useEffect(() => {
@@ -40,19 +46,17 @@ export default function Home() {
         text += event.results[i][0].transcript;
       }
       setTranscript(text);
-    };
 
-    recognition.onend = () => {
-      // When speech ends, send transcript to DeepSeek chat
-      if (transcript.trim() !== "") {
-        sendMessage(transcript);
+      // Send message immediately if final
+      const lastResult = event.results[event.results.length - 1];
+      if (lastResult.isFinal && text.trim() !== "") {
+        sendMessage(text);
+        setTranscript("");
       }
-      setListening(false);
-      setTranscript("");
     };
 
     recognitionRef.current = recognition;
-  }, [transcript]);
+  }, []);
 
   // Toggle microphone
   const toggleListening = () => {
@@ -67,20 +71,22 @@ export default function Home() {
     }
   };
 
-  // Send user message to DeepSeek
+  // Send user message and call DeepSeek
   const sendMessage = async (text: string) => {
     const userMessage: Message = { role: "user", text };
     setChat((prev) => [...prev, userMessage]);
+
+    // Add typing placeholder
+    const typingMessage: Message = { role: "agent", text: "Typing..." };
+    setChat((prev) => [...prev, typingMessage]);
 
     try {
       const response = await axios.post(
         DEEPSEEK_URL,
         {
           model: "deepseek-chat",
-          messages: [
-            { role: "user", content: text } // user voice message
-          ],
-          stream: false
+          messages: [{ role: "user", content: text }],
+          stream: false,
         },
         {
           headers: {
@@ -91,12 +97,24 @@ export default function Home() {
       );
 
       const agentText = response.data?.choices?.[0]?.message?.content || "No response";
-      const agentMessage: Message = { role: "agent", text: agentText };
-      setChat((prev) => [...prev, agentMessage]);
+
+      // Replace "Typing..." with actual agent response
+      setChat((prev) =>
+        prev.map((msg) =>
+          msg.text === "Typing..." && msg.role === "agent"
+            ? { ...msg, text: agentText }
+            : msg
+        )
+      );
     } catch (err) {
       console.error("DeepSeek API error:", err);
-      const agentMessage: Message = { role: "agent", text: "Error: could not get response" };
-      setChat((prev) => [...prev, agentMessage]);
+      setChat((prev) =>
+        prev.map((msg) =>
+          msg.text === "Typing..." && msg.role === "agent"
+            ? { ...msg, text: "Error: could not get response" }
+            : msg
+        )
+      );
     }
   };
 
@@ -120,7 +138,7 @@ export default function Home() {
       {/* Chat Window */}
       <div
         className={styles.textArea}
-        style={{ height: "300px", overflowY: "auto", padding: "1rem" }}
+        style={{ height: "400px", overflowY: "auto", padding: "1rem" }}
       >
         {chat.map((msg, i) => (
           <div
@@ -145,6 +163,7 @@ export default function Home() {
             </span>
           </div>
         ))}
+        <div ref={chatEndRef} />
       </div>
 
       <div className={styles.controls}>
